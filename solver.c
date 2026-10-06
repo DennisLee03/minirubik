@@ -29,14 +29,14 @@ static const char *const move_names[MOVES] = {"R",  "R2", "R'", "B", "B2",
 static const uint8_t inverse_move[MOVES] = {2, 1, 0, 5, 4, 3, 8, 7, 6};
 /* Each destination takes a cubie from source[face][destination]. */
 static const uint8_t source[3][CUBIES] = {
-    {1, 4, 2, 0, 3, 5, 6},
-    {0, 1, 2, 4, 5, 6, 3},
-    {0, 2, 5, 3, 1, 4, 6},
+    {1, 4, 2, 0, 3, 5, 6}, // R
+    {0, 1, 2, 4, 5, 6, 3}, // B
+    {0, 2, 5, 3, 1, 4, 6}, // D
 };
 static const uint8_t twist[3][CUBIES] = {
-    {1, 2, 0, 2, 1, 0, 0},
-    {0, 0, 0, 1, 2, 1, 2},
-    {0, 0, 0, 0, 0, 0, 0},
+    {1, 2, 0, 2, 1, 0, 0}, // R
+    {0, 0, 0, 1, 2, 1, 2}, // B
+    {0, 0, 0, 0, 0, 0, 0}, // D
 };
 
 /* The three quarter-turns preserve the fixed front-upper-left corner. */
@@ -190,24 +190,49 @@ static int valid(const state_t *state)
 
 static uint8_t *build_table(uint8_t *diameter)
 {
+    /**
+     * toward_solved stores 3,674,160(~367w) move numbers
+     * toward_solved[state] = a move back to solved state along shortest path
+     * Due to move numbers in range of [0, 8], we store each in byte
+     */
     uint8_t *toward_solved = malloc(STATES);
+    
+    // BFS's queue, stores compact number of states
     uint32_t *queue = malloc((size_t) STATES * sizeof *queue);
+
+    /**
+     * look-up tables: 0~5039 and 0~728
+     * next_permutation_after_turn = permutation[R_B_D][current_permutation]
+     * next_orientation_after_turn = orientation[R_B_D][current_orientation]
+     * To get next state quickly, otherwise it takes a lot to rank and unrank
+     */
     uint16_t permutation[3][PERMUTATIONS], orientation[3][ORIENTATIONS];
+
     uint32_t head = 0, tail = 1, level_end = 1;
     state_t state;
     if (!toward_solved || !queue) {
+        // if one of them allocating fails
         free(toward_solved);
         free(queue);
         return NULL;
     }
+
+    // ========== building 2 LUTs ==========
+    // Lehmer rank of each permutation
     for (uint16_t rank = 0; rank < PERMUTATIONS; ++rank) {
+
+        // state = PPPPPPP 1111111 from unrank_state()
         unrank_state((uint32_t) rank * ORIENTATIONS, &state);
+
+        // R(0), B(1), D(2) faces
         for (uint8_t face = 0; face < 3; ++face) {
+            // apply all atomic turns, others turns: X', X2 can be a sequence of Xs
             state_t next = quarter_turn(state, face);
             permutation[face][rank] =
                 (uint16_t) (rank_state(&next) / ORIENTATIONS);
         }
     }
+    // Base-3 rank of each orientation
     for (uint16_t rank = 0; rank < ORIENTATIONS; ++rank) {
         unrank_state(rank, &state);
         for (uint8_t face = 0; face < 3; ++face) {
@@ -216,7 +241,10 @@ static uint8_t *build_table(uint8_t *diameter)
                 (uint16_t) (rank_state(&next) % ORIENTATIONS);
         }
     }
-    memset(toward_solved, UINT8_MAX, STATES);
+    // This 2 LUTs building takes (5040 + 729) × 3 ≈ 17,000 iterations(of unrank, turn, rank).
+
+
+    memset(toward_solved, UINT8_MAX, STATES); // UINT8_MAX means not settled
     queue[0] = 0;
     toward_solved[0] = 0;
     *diameter = 0;
@@ -225,25 +253,41 @@ static uint8_t *build_table(uint8_t *diameter)
             level_end = tail;
             ++*diameter;
         }
-        uint32_t here = queue[head++];
-        uint16_t p = (uint16_t) (here / ORIENTATIONS);
-        uint16_t o = (uint16_t) (here % ORIENTATIONS);
+        uint32_t current_state = queue[head++]; // pop
+        uint16_t p = (uint16_t) (current_state / ORIENTATIONS);
+        uint16_t o = (uint16_t) (current_state % ORIENTATIONS);
+
         for (uint8_t face = 0; face < 3; ++face) {
             uint16_t next_p = p, next_o = o;
+
+            // hot loop: table lookups only, no rank_state()/unrank_state()
             for (uint8_t turn = 0; turn < 3; ++turn) {
-                next_p = permutation[face][next_p];
-                next_o = orientation[face][next_o];
-                uint32_t there = (uint32_t) next_p * ORIENTATIONS + next_o;
-                if (toward_solved[there] == UINT8_MAX) {
+
+                // apply R_B_D on current state to get next state
+                next_p = permutation[face][next_p]; // 33,067,440 transitions, ~15 instructions per transition
+                next_o = orientation[face][next_o]; // 33,067,440 transitions, ~15 instructions per transition
+                // 33,067,440 x 2 x ~15 = ~992023200, 10^9 order
+                // this is an estimation, using Ripes to run such instrutions takes too long
+
+                uint32_t next_state = (uint32_t) next_p * ORIENTATIONS + next_o;
+                
+                // if this state back to previous state is not specified
+                // the first visit to a state is along a shortest path
+                if (toward_solved[next_state] == UINT8_MAX) {
                     uint8_t move = (uint8_t) (face * 3U + turn);
-                    toward_solved[there] = inverse_move[move];
-                    queue[tail++] = there;
+
+                    // assign the inverse move
+                    toward_solved[next_state] = inverse_move[move];
+                    
+                    // push new state to next level
+                    queue[tail++] = next_state;
                 }
             }
         }
     }
     free(queue);
     if (tail != STATES) {
+        // tail = #enqueue = #states
         free(toward_solved);
         return NULL;
     }
@@ -300,8 +344,11 @@ static int output_failed(void)
 
 static int self_test(void)
 {
+    // 0123456 0000000
     const state_t solved = {{0, 1, 2, 3, 4, 5, 6}, {0}};
     state_t state;
+
+    // move inversion: verify `source` and `twist`
     for (uint8_t move = 0; move < MOVES; ++move) {
         state = solved;
         state = apply_move(state, move);
@@ -309,6 +356,9 @@ static int self_test(void)
         if (memcmp(&solved, &state, sizeof solved))
             return 0;
     }
+
+    // interate every compact number of states
+    // bijection invariant: verify one-to-one mapping
     for (uint32_t rank = 0; rank < STATES; ++rank) {
         unrank_state(rank, &state);
         if (!valid(&state) || rank_state(&state) != rank)
@@ -321,11 +371,15 @@ int main(int argc, char **argv)
 {
     state_t state;
     uint8_t diameter;
+
+    // $ ./solver --self-test
     if (argc == 2 && !strcmp(argv[1], "--self-test")) {
         if (!self_test()) {
             fputs("self-test failed\n", stderr);
             return 1;
         }
+
+        // graph exploration, verify BFS can reach every state
         uint8_t *table = build_table(&diameter);
         if (!table) {
             fputs("could not build complete state table\n", stderr);
@@ -339,6 +393,8 @@ int main(int argc, char **argv)
         puts("3674160 states; diameter 11");
         return output_failed();
     }
+    
+    // $ ./solver PPPPPPPOOOOOOO
     if (argc != 2 || !parse_state(argv[1], &state)) {
         /* C99 5.1.2.2.1 lets argv[0] be null when argc is 0. */
         fprintf(stderr, "usage: %s PPPPPPPOOOOOOO\n",
