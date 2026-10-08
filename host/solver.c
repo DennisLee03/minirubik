@@ -15,6 +15,10 @@ typedef struct {
     uint8_t p[CUBIES], o[CUBIES];
 } state_t;
 
+typedef struct {
+    uint32_t n;
+    float acc;
+} dis_acc_t;
 
 static const char *const move_names[MOVES] = {"R",  "R2", "R'", "B", "B2",
                                               "B'", "D",  "D2", "D'"};
@@ -30,8 +34,9 @@ static const uint8_t twist[3][CUBIES] = {
     {0, 0, 0, 1, 2, 1, 2}, // B
     {0, 0, 0, 0, 0, 0, 0}, // D
 };
-//static uint8_t hp[PERMUTATIONS];
-//static uint8_t ho[ORIENTATIONS];
+static uint8_t hp[PERMUTATIONS];
+static uint8_t ho[ORIENTATIONS];
+#define h(p, o) hp[p]>ho[o]?hp[p]:ho[o]
 
 static state_t quarter_turn(state_t state, uint8_t face)
 {
@@ -161,8 +166,10 @@ static uint8_t *build_table(uint8_t *diameter)
 
 
     // init heuristic tables
-    //memset(hp, UINT8_MAX, PERMUTATIONS);
-    //memset(ho, UINT8_MAX, ORIENTATIONS);
+    memset(hp, UINT8_MAX, PERMUTATIONS);
+    memset(ho, UINT8_MAX, ORIENTATIONS);
+    hp[0] = 0; 
+    ho[0] = 0;
 
     memset(toward_solved, UINT8_MAX, STATES); // UINT8_MAX means not settled
     queue[0] = 0;
@@ -195,6 +202,13 @@ static uint8_t *build_table(uint8_t *diameter)
                 // the first visit to a state is along a shortest path
                 if (toward_solved[next_state] == UINT8_MAX) {
                     uint8_t move = (uint8_t) (face * 3U + turn);
+
+                    if(hp[next_p] == UINT8_MAX || hp[next_p] > *diameter+1) {
+                        hp[next_p] = *diameter+1;
+                    }
+                    if(ho[next_o] == UINT8_MAX || ho[next_o] > *diameter+1) {
+                        ho[next_o] = *diameter+1;
+                    }
 
                     // assign the inverse move and distance
                     toward_solved[next_state] = (*diameter+1)<<4 | inverse_move[move];
@@ -298,17 +312,96 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        uint32_t *distances = calloc(diameter, sizeof *distances);
+        uint32_t *distances = calloc(diameter+1, sizeof *distances);
         uint32_t states = PERMUTATIONS*ORIENTATIONS;
 
-        for(uint32_t state = 1; state < states; state++) {
-            distances[((table[state] & 0xF0) >> 4) - 1]++;
+        for(uint32_t state = 0; state < states; state++) {
+            distances[((table[state] & 0xF0) >> 4)]++;
         }
 
-        for(uint32_t i=0; i<diameter; i++){
-            printf("%2d| %d\n", i+1, distances[i]);
+        for(uint8_t i=0; i<diameter+1; i++){
+            printf("%2d| %d\n", i, distances[i]);
         }
         
+        free(distances);
+        free(table);
+
+        return 0;
+    }
+
+    // $ ./solver --heuristic-test
+    if (argc == 2 && !strcmp(argv[1], "--heuristic-test")) {
+
+        // build table and check
+        uint8_t *table = build_table(&diameter);
+        if (!table) {
+            fputs("could not build complete state table\n", stderr);
+            return 1;
+        }
+
+        uint32_t *hp_distances = calloc(diameter+1, sizeof *hp_distances);
+        uint32_t *ho_distances = calloc(diameter+1, sizeof *ho_distances);
+        uint32_t states = PERMUTATIONS*ORIENTATIONS;
+
+        // Test every heuristic value
+        for(uint32_t state = 0; state < states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+            uint32_t d = ((table[state] & 0xF0) >> 4);
+            
+            // check every hp[p], ho[o] <= d[s]
+            if(hp[p] > d){
+                printf("heuristic fails at: hp[%u]=%u\n", p, hp[p]);
+                return 1;
+            }
+            else if(ho[o] > d) {
+                printf("heuristic fails at: ho[%u]=%u\n", o, ho[o]);
+                return 1;
+            }
+        }
+        printf("heuristics passed for all hp[] and ho[]\n");
+        
+        // Record distributions
+        for(uint32_t i=0; i<PERMUTATIONS; i++) {
+            hp_distances[hp[i]]++;
+        }
+        for(uint32_t i=0; i<ORIENTATIONS; i++) {
+            ho_distances[ho[i]]++;
+        }
+        printf("|dis|  hp  |  ho  |\n");
+        printf("|---|------|------|\n");
+        uint32_t acc_p=0, acc_o=0;
+        for(uint8_t d=0; d<diameter+1; d++) {
+            printf("| %2d| %4d | %4d |\n", d, hp_distances[d], ho_distances[d]);
+            acc_p += hp_distances[d];
+            acc_o += ho_distances[d];
+        }
+        printf("|acc| %4d | %4d |\n", acc_p, acc_o);
+        
+        // heuristic accuracy test: h(p, o) = max(hp[p], ho[o])
+        dis_acc_t *stat = calloc(diameter+1, sizeof *stat); 
+        for(uint32_t state = 0; state < states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+
+            // d(state)
+            uint32_t d = ((table[state] & 0xF0) >> 4);
+            
+            // h(state)
+            uint32_t heuristic = h(p, o);
+
+            stat[d].n += 1;
+            stat[d].acc += (float)heuristic;
+        }
+        printf("|  d |     n    |  avg h  |  d - h  |\n");
+        printf("|----|----------|---------|---------|\n");
+        for(uint8_t d=0; d<diameter+1; d++) {
+            stat[d].acc /= (float)stat[d].n;
+            printf("| %2d | %8d | %7.2f | %7.2f |\n", d, stat[d].n, stat[d].acc, (float)d-stat[d].acc);
+        }
+
+        free(hp_distances);
+        free(ho_distances);
         free(table);
 
         return 0;

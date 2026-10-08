@@ -16,7 +16,10 @@ solver: solver.c
 	@$(CC) $(CFLAGS) $< -o $@
 
 rss-distance-test: solver
-	/usr/bin/time -v ./solver --distance-test
+	@/usr/bin/time -v ./solver --distance-test
+
+heuristic-test: solver
+	@./solver --heuristic-test
 
 clean:
 	@$(RM) solver
