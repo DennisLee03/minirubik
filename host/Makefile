@@ -27,5 +27,8 @@ star-test: solver
 apply-test: solver
 	@./solver --apply-test
 
+worst-test: solver
+	@./solver --worst-test
+
 clean:
 	@$(RM) solver

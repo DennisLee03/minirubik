@@ -233,10 +233,9 @@ static uint8_t *build_table(uint8_t *diameter)
 }
 
 
-static uint32_t nodes = 0;
+static uint64_t nodes = 0;
 uint8_t path[11];
 static uint8_t dfs(uint16_t p, uint16_t o, uint16_t g, uint8_t last_face, uint8_t bound) {
-    nodes += 1;
 
     // solved!
     if(p==0 && o==0) return 1;
@@ -246,6 +245,7 @@ static uint8_t dfs(uint16_t p, uint16_t o, uint16_t g, uint8_t last_face, uint8_
     // h(p, o): heuristic distance remain
     if((g + (h(p, o))) > bound) return 0;
 
+    nodes += 1;
     for(uint8_t face=0; face<3; face++) {
         
         // free pruning
@@ -487,6 +487,37 @@ int main(int argc, char **argv)
             }
         }
         printf("Distances of all states passed\n");
+        free(table);
+        return 0;
+    }
+
+    // $ ./solver --worst-test
+    if (argc == 2 && !strcmp(argv[1], "--worst-test")) {
+        uint8_t *table = build_table(&diameter);
+        if (!table) {
+            fputs("could not build complete state table\n", stderr);
+            return 1;
+        }
+        uint32_t states = PERMUTATIONS*ORIENTATIONS;
+        uint64_t worst = 0;
+        uint32_t worst_state = 0;
+        for(uint32_t state=0; state<states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+
+            // exact shortest distance
+            uint8_t d = (table[state] & 0xF0) >> 4;
+
+            // ida*
+            if(d < 11) continue;
+            uint8_t d_ida = solve(p, o);
+            if(d_ida == 11 && worst < nodes) {
+                worst = nodes;
+                worst_state = state;
+            }
+        }
+        printf("Worst number of nodes visited: %lu, and its rank=%u\n", worst, worst_state);
+        free(table);
         return 0;
     }
 
