@@ -394,7 +394,7 @@ int main(int argc, char **argv)
         return output_failed();
     }
     
-    // $ ./solver PPPPPPPOOOOOOO
+    // $ when not ./solver PPPPPPPOOOOOOO
     if (argc != 2 || !parse_state(argv[1], &state)) {
         /* C99 5.1.2.2.1 lets argv[0] be null when argc is 0. */
         fprintf(stderr, "usage: %s PPPPPPPOOOOOOO\n",
