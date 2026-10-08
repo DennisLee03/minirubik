@@ -34,9 +34,11 @@ static const uint8_t twist[3][CUBIES] = {
     {0, 0, 0, 1, 2, 1, 2}, // B
     {0, 0, 0, 0, 0, 0, 0}, // D
 };
+static uint16_t permutation[3][PERMUTATIONS];
+static uint16_t orientation[3][ORIENTATIONS];
 static uint8_t hp[PERMUTATIONS];
 static uint8_t ho[ORIENTATIONS];
-#define h(p, o) hp[p]>ho[o]?hp[p]:ho[o]
+#define h(p, o) (hp[p]>ho[o]?hp[p]:ho[o])
 
 static state_t quarter_turn(state_t state, uint8_t face)
 {
@@ -127,7 +129,8 @@ static uint8_t *build_table(uint8_t *diameter)
      * next_orientation_after_turn = orientation[R_B_D][current_orientation]
      * To get next state quickly, otherwise it takes a lot to rank and unrank
      */
-    uint16_t permutation[3][PERMUTATIONS], orientation[3][ORIENTATIONS];
+    // uint16_t permutation[3][PERMUTATIONS], orientation[3][ORIENTATIONS];
+    // move to global
 
     uint32_t head = 0, tail = 1, level_end = 1;
     state_t state;
@@ -229,6 +232,52 @@ static uint8_t *build_table(uint8_t *diameter)
     return toward_solved;
 }
 
+
+static uint32_t nodes = 0;
+uint8_t path[11];
+static uint8_t dfs(uint16_t p, uint16_t o, uint16_t g, uint8_t last_face, uint8_t bound) {
+    nodes += 1;
+
+    // solved!
+    if(p==0 && o==0) return 1;
+
+    // prune
+    //       g: current distance paid; 
+    // h(p, o): heuristic distance remain
+    if((g + (h(p, o))) > bound) return 0;
+
+    for(uint8_t face=0; face<3; face++) {
+        
+        // free pruning
+        if(face == last_face) continue;
+
+        // search
+        uint16_t next_p = p, next_o = o;
+        for(uint8_t turn=0; turn<3; turn++) {
+            // try to turn X(0), X2(1), X'(2)
+            next_p = permutation[face][next_p];
+            next_o = orientation[face][next_o];
+            path[g] = face*3 + turn;
+            if(dfs(next_p, next_o, g+1, face, bound)) return 1;
+        }
+    }
+
+    return 0;
+}
+
+static uint8_t solve(uint16_t p0, uint16_t o0) {
+    nodes = 0;
+    // path
+    memset(path, 0xFF, 11);
+
+    uint8_t bound = h(p0, o0);
+
+    while(bound <= 11) {
+        if(dfs(p0, o0, 0, 0xFF, bound)) return bound; 
+        bound++;
+    }
+    return 255;
+}
 
 static int parse_state(const char *input, state_t *state)
 {
@@ -406,6 +455,75 @@ int main(int argc, char **argv)
 
         return 0;
     }
+
+    // $ ./solver --star-test
+    if (argc == 2 && !strcmp(argv[1], "--star-test")) {
+        uint8_t *table = build_table(&diameter);
+        if (!table) {
+            fputs("could not build complete state table\n", stderr);
+            return 1;
+        }
+        uint32_t states = PERMUTATIONS*ORIENTATIONS;
+        for(uint32_t state=0; state<states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+
+            // bfs
+            uint8_t d_bfs = (table[state] & 0xF0) >> 4;
+            state_t s;
+            for (uint32_t rank = state; rank; rank = rank_state(&s)) {
+                uint8_t move = table[rank] & 0x0F;
+                unrank_state(rank, &s);
+                s = apply_move(s, move);
+            }
+
+            // ida*
+            uint8_t d_ida = solve(p, o);
+
+            if(d_ida != d_bfs) {
+                printf("Fail at state: %d\n", state);
+                printf("BFS: %d, IDA*: %d\n", d_bfs, d_ida);
+                return 1;
+            }
+        }
+        printf("Distances of all states passed\n");
+        return 0;
+    }
+
+    // $ ./solver --apply-test
+    if (argc == 2 && !strcmp(argv[1], "--apply-test")) {
+
+        uint8_t *table = build_table(&diameter);
+        if (!table) {
+            fputs("could not build complete state table\n", stderr);
+            return 1;
+        }
+
+        uint32_t states = PERMUTATIONS*ORIENTATIONS;
+        for(uint32_t state=0; state<states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+
+            // ida*
+            uint8_t d_ida = solve(p, o);
+            (void)d_ida;
+
+            // apply moves
+            state_t s;
+            unrank_state(state, &s);
+            for(uint8_t move_idx=0; move_idx<11; move_idx++) {
+                if(path[move_idx] == 0xFF) break;
+                s = apply_move(s, path[move_idx]);
+            }
+            uint32_t applied = rank_state(&s);
+            if(applied != 0) {
+                printf("IDA* fail at state: %d\n", applied);
+                return 1;
+            }
+        }
+        printf("All states solving passed\n");
+        return 0;
+    }
     
     // $ when not ./solver PPPPPPPOOOOOOO
     if (argc != 2 || !parse_state(argv[1], &state)) {
@@ -414,13 +532,16 @@ int main(int argc, char **argv)
                 argc > 0 && argv[0] ? argv[0] : "solver");
         return 2;
     }
+
+    // $ ./solver PPPPPPPOOOOOOO
     uint8_t *table = build_table(&diameter);
     if (!table) {
         fputs("could not build complete state table\n", stderr);
         return 1;
     }
     const char *separator = "";
-    uint8_t distance = (table[rank_state(&state)] & 0xF0) >> 4;
+    uint32_t unsolved = rank_state(&state);
+    uint8_t distance = (table[unsolved] & 0xF0) >> 4;
     printf("distance: %d\n", distance);
     for (uint32_t rank = rank_state(&state); rank; rank = rank_state(&state)) {
         uint8_t move = table[rank] & 0x0F;          // keep lower nibble which is a move
@@ -429,6 +550,21 @@ int main(int argc, char **argv)
         state = apply_move(state, move);
     }
     putchar('\n');
+
+    // $ ./solver PPPPPPPOOOOOOO by IDA*
+    uint16_t p = (uint16_t)(unsolved/729);
+    uint16_t o = (uint16_t)(unsolved%729);
+    uint8_t cost = solve(p, o);
+
+    printf("distance = %d\n", cost);
+    for(uint8_t step=0; step<cost; step++) {
+        uint8_t move = path[step];
+        if(move != 0xFF) {
+            printf("%s ", move_names[move]);
+        }
+    }
+    printf("\n");
+
     free(table);
     return output_failed();
 }

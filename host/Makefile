@@ -21,5 +21,11 @@ rss-distance-test: solver
 heuristic-test: solver
 	@./solver --heuristic-test
 
+star-test: solver
+	@./solver --star-test
+
+apply-test: solver
+	@./solver --apply-test
+
 clean:
 	@$(RM) solver
