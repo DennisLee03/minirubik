@@ -27,6 +27,9 @@ star-test: solver
 apply-test: solver
 	@./solver --apply-test
 
+rec-iter-test: solver
+	@./solver --rec-iter-test
+
 worst-test: solver
 	@./solver --worst-test
 

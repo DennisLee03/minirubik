@@ -38,6 +38,8 @@ static uint16_t permutation[3][PERMUTATIONS];
 static uint16_t orientation[3][ORIENTATIONS];
 static uint8_t hp[PERMUTATIONS];
 static uint8_t ho[ORIENTATIONS];
+static uint64_t nodes = 0; // statistic
+uint8_t path[11];          // recorded path to solved
 #define h(p, o) (hp[p]>ho[o]?hp[p]:ho[o])
 
 static state_t quarter_turn(state_t state, uint8_t face)
@@ -232,9 +234,7 @@ static uint8_t *build_table(uint8_t *diameter)
     return toward_solved;
 }
 
-
-static uint64_t nodes = 0;
-uint8_t path[11];
+// dfs recursion
 static uint8_t dfs(uint16_t p, uint16_t o, uint16_t g, uint8_t last_face, uint8_t bound) {
 
     // solved!
@@ -265,7 +265,7 @@ static uint8_t dfs(uint16_t p, uint16_t o, uint16_t g, uint8_t last_face, uint8_
     return 0;
 }
 
-static uint8_t solve(uint16_t p0, uint16_t o0) {
+static uint8_t solve_recursion(uint16_t p0, uint16_t o0) {
     nodes = 0;
     // path
     memset(path, 0xFF, 11);
@@ -276,7 +276,76 @@ static uint8_t solve(uint16_t p0, uint16_t o0) {
         if(dfs(p0, o0, 0, 0xFF, bound)) return bound; 
         bound++;
     }
-    return 255;
+    return 0; // error. 0 moves with a unsolved state fails at apply-test
+}
+
+static uint8_t solve_iteration(uint16_t p0, uint16_t o0) {
+    
+    // reset #nodes explored
+    nodes=0;
+    
+    // path
+    memset(path, 0xFF, 11);
+
+    uint16_t p[12], o[12];
+    uint16_t next_p[12], next_o[12];
+    uint8_t face[12], turn[12];
+
+    nodes = 0;
+
+    // already solved
+    if(p0 == 0 && o0 == 0) return 0;
+
+    for(uint8_t bound = h(p0, o0); bound <= 11; bound++) {
+
+        // dfs root
+        uint8_t g = 0;
+        p[0] = p0; o[0] = o0;
+        face[0] = 0; turn[0] = 0;
+        next_p[0] = p0; next_o[0] = o0;
+
+        nodes++;
+
+        while(1) {
+            uint8_t descended = 0;
+
+            // explore nodes at level g:
+            for(; face[g] < 3; face[g]++, turn[g] = 0, next_p[g] = p[g], next_o[g] = o[g]) {
+                
+                // if(last_face == face): skip this face
+                if(g > 0 && face[g] == face[g-1]) continue;
+                
+                for(; turn[g] < 3; ) {
+                    next_p[g] = permutation[face[g]][next_p[g]];
+                    next_o[g] = orientation[face[g]][next_o[g]];
+                    path[g] = face[g]*3 + turn[g];
+                    turn[g]++;
+
+                    // solved
+                    if(next_p[g] == 0 && next_o[g] == 0) return g+1;
+
+                    // prune
+                    if((g+1) + h(next_p[g], next_o[g]) > bound) continue;
+                    
+                    p[g+1] = next_p[g]; o[g+1] = next_o[g];
+                    g++;
+                    face[g] = 0; turn[g] = 0;
+                    next_p[g] = p[g]; next_o[g] = o[g];
+                    nodes++;
+                    descended = 1;
+                    break;
+                }
+                if(descended) break;
+            }
+            if(descended) continue;
+
+            if(g == 0) break;
+
+            g--;
+        }
+    }
+
+    return 0;// error. 0 moves with a unsolved state fails at apply-test
 }
 
 static int parse_state(const char *input, state_t *state)
@@ -478,7 +547,7 @@ int main(int argc, char **argv)
             }
 
             // ida*
-            uint8_t d_ida = solve(p, o);
+            uint8_t d_ida = solve_iteration(p, o);
 
             if(d_ida != d_bfs) {
                 printf("Fail at state: %d\n", state);
@@ -510,7 +579,7 @@ int main(int argc, char **argv)
 
             // ida*
             if(d < 11) continue;
-            uint8_t d_ida = solve(p, o);
+            uint8_t d_ida = solve_recursion(p, o);
             if(d_ida == 11 && worst < nodes) {
                 worst = nodes;
                 worst_state = state;
@@ -536,13 +605,12 @@ int main(int argc, char **argv)
             uint32_t o = state%729;
 
             // ida*
-            uint8_t d_ida = solve(p, o);
-            (void)d_ida;
+            uint8_t d_ida = solve_recursion(p, o);
 
             // apply moves
             state_t s;
             unrank_state(state, &s);
-            for(uint8_t move_idx=0; move_idx<11; move_idx++) {
+            for(uint8_t move_idx=0; move_idx<d_ida; move_idx++) {
                 if(path[move_idx] == 0xFF) break;
                 s = apply_move(s, path[move_idx]);
             }
@@ -550,6 +618,45 @@ int main(int argc, char **argv)
             if(applied != 0) {
                 printf("IDA* fail at state: %d\n", applied);
                 return 1;
+            }
+        }
+        printf("All states solving passed\n");
+        return 0;
+    }
+
+    // $ ./solver --rec-iter-test
+    if (argc == 2 && !strcmp(argv[1], "--rec-iter-test")) {
+
+        uint8_t *table = build_table(&diameter);
+        if (!table) {
+            fputs("could not build complete state table\n", stderr);
+            return 1;
+        }
+
+        uint32_t states = PERMUTATIONS*ORIENTATIONS;
+        for(uint32_t state=0; state<states; state++) {
+            uint32_t p = state/729;
+            uint32_t o = state%729;
+
+            // recursively
+            uint8_t d_rec = solve_recursion(p, o);
+            uint64_t nodes_rec = nodes;
+            uint8_t path_rec[11];
+            for(size_t i=0; i<11; i++) path_rec[i] = path[i];
+
+            // iteratively
+            uint8_t d_ite = solve_iteration(p, o);
+
+            if(d_ite != d_rec) {
+                printf("Distance is different at state: %u\n", state);
+            }
+
+            if(nodes != nodes_rec) {
+                printf("#nodes is different at state: %u\n", state);
+            }
+
+            for(size_t i=0; i<d_ite; i++) {
+                if(path[i] != path_rec[i]) return 1; 
             }
         }
         printf("All states solving passed\n");
@@ -585,7 +692,7 @@ int main(int argc, char **argv)
     // $ ./solver PPPPPPPOOOOOOO by IDA*
     uint16_t p = (uint16_t)(unsolved/729);
     uint16_t o = (uint16_t)(unsolved%729);
-    uint8_t cost = solve(p, o);
+    uint8_t cost = solve_recursion(p, o);
 
     printf("distance = %d\n", cost);
     for(uint8_t step=0; step<cost; step++) {
