@@ -33,5 +33,11 @@ rec-iter-test: solver
 worst-test: solver
 	@./solver --worst-test
 
+# Regenerate the tables linked by the standalone C solver and the RV32I
+# solver from the same build_table() that H1 and H2 check.
+tables: solver
+	./solver --emit-c > ../target/tables.h
+	./solver --emit-asm > ../target/tables.s
+
 clean:
 	@$(RM) solver
