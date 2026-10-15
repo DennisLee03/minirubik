@@ -77,7 +77,7 @@ static uint16_t rank_perm(const state_t *state) {
     }
 
     // unroll:
-    p = (p << 3) - p + smaller[0];
+    p = smaller[0];
     p = (p << 2) + (p << 1) + smaller[1];
     p = (p << 2) + p + smaller[2];
     p = (p << 2) + smaller[3];
