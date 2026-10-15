@@ -5,3 +5,6 @@ solver
 mini
 rank
 hw1*.md
+*.o
+verify
+specific_mod

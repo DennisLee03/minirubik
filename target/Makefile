@@ -8,9 +8,9 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all clean test
+.PHONY: all clean test target-obj
 
-all: solver
+all: solver target-obj
 
 solver: solver.c
 	@$(CC) $(CFLAGS) $< -o $@
@@ -18,5 +18,8 @@ solver: solver.c
 test: solver
 	@./solver 21345671111111
 
+target-obj:
+	@riscv64-unknown-elf-gcc --specs=picolibc.specs -O2 -march=rv32i -mabi=ilp32 -std=c99 -c solver.c -o solver.o
+
 clean:
-	@rm solver
+	@rm solver *.o

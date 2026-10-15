@@ -40,4 +40,4 @@ tables: solver
 	./solver --emit-asm > ../target/tables.s
 
 clean:
-	@$(RM) solver
+	@$(RM) solver *.o

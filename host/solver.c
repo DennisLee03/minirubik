@@ -318,7 +318,7 @@ static uint8_t solve_iteration(uint16_t p0, uint16_t o0) {
                 for(; turn[g] < 3; ) {
                     next_p[g] = permutation[face[g]][next_p[g]];
                     next_o[g] = orientation[face[g]][next_o[g]];
-                    path[g] = face[g]*3 + turn[g];
+                    path[g] = ((face[g]<<1) + face[g]) + turn[g];
                     turn[g]++;
 
                     // solved
