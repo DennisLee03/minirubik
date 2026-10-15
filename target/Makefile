@@ -8,7 +8,7 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all clean rss-test
+.PHONY: all clean test
 
 all: solver
 
@@ -17,3 +17,6 @@ solver: solver.c
 
 test: solver
 	@./solver 21345671111111
+
+clean:
+	@rm solver
