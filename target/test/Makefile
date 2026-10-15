@@ -1,5 +1,7 @@
 .PHONY: all clean rank test-rank
 
+all: rank
+
 rank:
 	@gcc -o rank rank.c
 
