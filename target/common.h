@@ -21,6 +21,12 @@ typedef struct {
 static const char *const move_names[MOVES] = {"R",  "R2", "R'", "B", "B2",
                                               "B'", "D",  "D2", "D'"};
 
+// sum in [0, 14]: sum%3 == sum_mod3[sum]
+static const uint8_t sum_mod3[15] = {0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2};
+
+// i in [0, 13]: i%7 == i_mod7[i]
+static const uint8_t i_mod7[14] = {0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6};
+
 /**
  * \brief Rank `state` for Lehmer rank of its perm
  * \param state a representation of minirubik
@@ -81,7 +87,7 @@ static int valid(const state_t *state)
                 return 0;
         sum = (uint8_t) (sum + state->o[i]);
     }
-    return sum % 3U == 0;
+    return sum_mod3[sum] == 0;
 }
 
 static int parse_state(const char *input, state_t *state)
@@ -90,7 +96,7 @@ static int parse_state(const char *input, state_t *state)
         int limit = i < 7 ? 7 : 3;
         if (input[i] < '1' || input[i] > '0' + limit)
             return 0;
-        (i < 7 ? state->p : state->o)[i % 7] = (uint8_t) (input[i] - '1');
+        (i < 7 ? state->p : state->o)[i_mod7[i]] = (uint8_t) (input[i] - '1');
     }
     return input[14] == '\0' && valid(state);
 }

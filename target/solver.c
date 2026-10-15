@@ -1,9 +1,5 @@
 #include "tables.h"
 #include "common.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 uint8_t path[11];          // recorded path to solved
 #define h(p, o) (hp[p]>ho[o]?hp[p]:ho[o])
@@ -82,6 +78,7 @@ int main(int argc, char **argv)
     }
 
     // $ ./solver PPPPPPPOOOOOOO by IDA*
+    // turn by permutation and orientation tables
     uint16_t p = rank_perm(&state);
     uint16_t o = rank_orie(&state);
     uint8_t cost = solve_iteration(p, o);
