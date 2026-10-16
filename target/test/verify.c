@@ -17,19 +17,9 @@ int main(int argc, char *argv[]) {
     }
 
     // apply face turns by transition table
-    uint16_t next_p = p, next_o = o;
-    for(uint8_t i = 0; i < cost; i++) {
-      uint8_t move = path[i];
-      uint8_t face = move_face[move], turns = move_turns[move];
-      for(uint8_t turn = 0; turn < turns; turn++) {
-        next_p = permutation[face][next_p];
-        next_o = orientation[face][next_o];
-      }
-    }
-
-    // test (p, o) == (0, 0)
-    if((next_p != 0) || (next_o != 0)) {
-      printf("After solve_iteration and transition errors: (%hu, %hu)\n", next_p, next_o);
+    uint8_t valid = verify_path(p, o, path, cost);
+    if(!valid) {
+      printf("solve_iteration(%hu, %hu) errors.\n", p, o);
       return 1;
     }
   }

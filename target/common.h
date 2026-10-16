@@ -2,9 +2,13 @@
 #define COMMON_H
 
 #include <stdint.h>
+
+#ifndef __riscv
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#endif
+
 #include "tables.h"
 
 uint8_t path[11];          // recorded path to solved
@@ -109,6 +113,7 @@ static int parse_state(const char *input, state_t *state)
     return input[14] == '\0' && valid(state);
 }
 
+#ifndef __riscv
 /* stdout is fully buffered off a terminal, so a write error surfaces at the
  * flush, not at the printf that queued the bytes. Every exit path that has
  * produced output goes through here.
@@ -117,11 +122,31 @@ static int output_failed(void)
 {
     return fflush(stdout) != 0 || ferror(stdout);
 }
+#endif
+
+/**
+ * \brief Verify a single path of a given state
+ * \param p0 permutation
+ * \param o0 orientation
+ * \param pth from (`p`, `o`) to (0, 0)
+ * \param len length of the path
+ * \return 1 valid path, 0 invalid path
+ */
+static uint8_t verify_path(uint16_t p0, uint16_t o0, const uint8_t *pth, uint8_t len) {
+    uint16_t next_p = p0, next_o = o0;
+    for(uint8_t i = 0; i < len; i++) {
+        uint8_t move = pth[i];
+        uint8_t face = move_face[move], turns = move_turns[move];
+        for(uint8_t turn = 0; turn < turns; turn++) {
+            next_p = permutation[face][next_p];
+            next_o = orientation[face][next_o];
+        }
+    }
+
+    return ((next_p == 0) && (next_o == 0));
+}
 
 static uint8_t solve_iteration(uint16_t p0, uint16_t o0) {
-  
-    // path
-    memset(path, 0xFF, 11);
 
     uint16_t p[12], o[12];
     uint16_t next_p[12], next_o[12];

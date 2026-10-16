@@ -8,9 +8,15 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all clean test target-obj
+RV_CC      := riscv64-unknown-elf-gcc
+RV_NM      := riscv64-unknown-elf-nm
+RV_CFLAGS  := -O2 -march=rv32i -mabi=ilp32 -std=c99 -ffreestanding
+RV_LDFLAGS := -nostdlib -nostartfiles -Wl,-Ttext=0x0 -Wl,-e,_start
+RIPES      ?= ~/ca2026_ws/Ripes-v2.2.6-106-g5b8a616-linux-x86_64.AppImage
 
-all: solver target-obj
+.PHONY: all clean test
+
+all: solver solver.elf
 
 solver: solver.c
 	@$(CC) $(CFLAGS) $< -o $@
@@ -18,8 +24,14 @@ solver: solver.c
 test: solver
 	@./solver 21345671111111
 
-target-obj:
-	@riscv64-unknown-elf-gcc --specs=picolibc.specs -O2 -march=rv32i -mabi=ilp32 -std=c99 -c solver.c -o solver.o
+solver.elf: solver.c common.h tables.h
+	@$(RV_CC) $(RV_CFLAGS) $(RV_LDFLAGS) $< -o $@
+
+check-sym: solver.elf
+	@$(RV_NM) solver.elf
+
+ripes: solver.elf
+	@$(RIPES) --mode cli --src solver.elf -t elf --proc RV32_ISS --iret
 
 clean:
-	@rm solver *.o
+	@rm solver *.o solver.elf
