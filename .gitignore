@@ -9,3 +9,4 @@ hw1*.md
 verify
 specific_mod
 *.elf
+*ida_full.s
