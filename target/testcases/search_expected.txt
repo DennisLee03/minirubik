@@ -1,0 +1,26 @@
+# Expected search results for the valid states, from host/solver.c's
+# solve_iteration (the iterative IDA* that matches the recursive one on
+# every state). Use them as checkpoints while writing solve in ida.S.
+#
+#   h0     = max(hp[r_p], ho[r_o]), the first bound
+#   len    = solution length = exact distance
+#   nodes  = expanded nodes: the root once per bound, plus every node
+#            entered after passing the g + h > bound test
+#   path   = move numbers 0..8 (R R2 R' B B2 B' D D2 D'), in the order
+#            the search finds them; any optimal path is correct, but an
+#            exact translation of solve_iteration finds this one
+#
+# Checkpoint 1: one R quarter turn from solved gives
+#               perm_R[0] = 1104, orient_R[0] = 426.
+#
+# state          r_p   r_o  h0  len    nodes  path
+12345671111111      0     0   0    0        0
+25314672313211   1104   426   1    1        1  2
+54321671111111   3294     0   1    1        1  1
+26547312333212   1289   480   3    3        3  6 5 2
+37156422322313   2057   447   5    8      409  2 5 0 6 2 8 0 5
+13524762112211    169   255   4    9     1838  0 5 6 5 7 5 2 3 8
+62417351323232   3772   212   5    9     1911  2 6 5 7 0 7 2 3 7
+76543213333331   5039   728   6   10     5593  0 7 1 4 0 3 1 8 2 4
+21345671111111    720     0   7   11    38998  0 5 7 2 3 2 5 0 7 0 3
+54721631111111   3343     0   6   11   106635  4 2 3 2 8 3 1 3 0 3 8

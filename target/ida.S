@@ -27,11 +27,10 @@
 #define SYS_PRINT_CHAR  11
 #define SYS_EXIT        93
 
-
 .data
 # INPUT INFO
 input:  .string "21345673211213"
-length: .byte   11
+#define EXPECTED 10
 
 # modulo data
 sum_mod3: .byte 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2 # 15 elements
@@ -44,6 +43,10 @@ state_o: .byte 0, 0, 0, 0, 0, 0, 0
 # smaller[6] for rank_perm
 smaller: .zero 6
 
+# move constant
+move_face:  .byte 0, 0, 0, 1, 1, 1, 2, 2, 2
+move_turns: .byte 1, 2, 3, 1, 2, 3, 1, 2, 3
+
 #if DEBUG
 msg_print_state: .string "State Representation:\n"
 msg_permutation: .string "Calculate Permutation:\n"
@@ -51,6 +54,27 @@ msg_orientation: .string "Calculate Orientation:\n"
 msg_p_equ:       .string "p = "
 msg_o_equ:       .string "o = "
 #endif
+
+/**
+ * WARNING:
+ *     Due to data(.byte, .string) defined above,
+ *     alignment is crucial after the above declaration.
+ *     .halfword and .word need to be aligned!!!!!!
+ */
+
+.align 2 # aligned with multiple of 4 bytes
+perm_rows:   .word perm_R, perm_B, perm_D
+orient_rows: .word orient_R, orient_B, orient_D
+
+# for solve_iteration to keep information
+stk_p:    .zero 24  # 12 halfwords
+stk_o:    .zero 24  # 12 halfwords
+stk_np:   .zero 24  # 12 halfwords
+stk_no:   .zero 24  # 12 halfwords
+stk_face: .zero 12  # 12 bytes
+stk_turn: .zero 12  # 12 bytes
+path:     .byte 0, 7, 5, 6, 5, 1, 8, 0, 3, 7
+
 
 .text
 .globl _start
@@ -75,12 +99,12 @@ _start:
   # calculate (p, o)
   cal_p_o:
   call rank_perm
-  mv s3, a0
+  mv ROOT_P, a0
   #if DEBUG
   la a0, msg_p_equ
   li a7, SYS_PRINT_STR
   ecall
-  mv a0, s3
+  mv a0, ROOT_P
   li a7, SYS_PRINT_INT
   ecall
   li a0, 10 # \n
@@ -92,12 +116,12 @@ _start:
   #endif
   
   call rank_orie
-  mv s4, a0
+  mv ROOT_O, a0
   #if DEBUG
   la a0, msg_o_equ
   li a7, SYS_PRINT_STR
   ecall
-  mv a0, s4
+  mv a0, ROOT_O
   li a7, SYS_PRINT_INT
   ecall
   li a0, 10 # \n
@@ -108,7 +132,9 @@ _start:
   ecall
   #endif
 
-  # now we have (p, o) in (s3, s4)
+  # now we have (p, o) in (ROOT_P, ROOT_O)
+
+  call verify_path
 
   exit: 
   li a7, SYS_EXIT
@@ -364,6 +390,60 @@ rank_orie:
     blt t0, t1, ro_loop # check i < 6
 
   mv a0, s0
+  ret
+
+# verify_path
+#    input:  ROOT_P, ROOT_O, path, len
+#    output: 1 valid, 0: invalid path 
+verify_path:
+  mv t0, ROOT_P       # t0: next_p=p0
+  mv t1, ROOT_O       # t1: next_o=o0
+  la t3, path         # t3: path
+  la a1, move_face    # a1: move_face
+  la a2, move_turns   # a2: move_turns
+  la a3, perm_rows    # a3: perm_rows = {perm_R, perm_B, perm_D}
+  la a4, orient_rows  # a4: orient_rows = {orient_R, orient_B, orient_D}
+  li t2, 0            # t2: i=0
+  vp_loop_i:
+    ########## TODO ############
+    li t5, EXPECTED
+    ########## TODO ############
+    bge t2, t5, vp_ret   # i >= len: terminate loop
+    add t4, t3, t2       # t4 = path + i
+    lbu t4, 0(t4)        # t4 = move = path[i]
+    add t5, a1, t4       # t5 = move_face + move
+    lbu t5, 0(t5)        # t5 = face = move_face[move]
+    add t6, a2, t4       # t6 = move_turns + move
+    lbu t6, 0(t6)        # t6 = turns = move_turns[move]
+
+    mv t4, zero
+    vp_loop_turn:
+      bge t4, t6, vp_update_i
+      slli a6, t5, 2     # a6 = face * 4
+      add a5, a3, a6     # a5 = &permutation[face]
+      lw a5, 0(a5)       # a5 = permutation[face]
+      slli t0, t0, 1     # t0 = next_p * 2 bytes
+      add t0, a5, t0     # t0 = &permutation[face][next_p]
+      lhu t0, 0(t0)      # t0 = permutation[face][next_p]
+      add a5, a4,a6     # a5 = &orientation[face]
+      lw a5, 0(a5)       # a5 = orientation[face]
+      slli t1, t1, 1     # t1 = next_o * 2 bytes
+      add t1, a5, t1     # t1 = &orientation[face][next_o]
+      lhu t1, 0(t1)      # t1 = orientation[face][next_o]
+      addi t4, t4, 1     # turn++
+      j vp_loop_turn
+
+    vp_update_i:
+    addi t2, t2, 1       # i++
+    j vp_loop_i
+
+  vp_ret:
+  bne t0, zero, vp_ret_0
+  bne t1, zero, vp_ret_0
+  li a0, 1
+  ret
+  vp_ret_0:
+  mv a0, zero
   ret
 
 #if DEBUG
