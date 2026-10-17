@@ -1,0 +1,12 @@
+# Invalid inputs, one per line:  STATE # comment
+# Each line names the check that should reject it.
+1234567111111 # 13 characters: the 14th character read is the terminating NUL
+123456711111111 # 15 characters: rejected only if the parser checks input[14] == NUL
+02345671111111 # cubie digit 0, below '1'
+82345671111111 # cubie digit 8, above '7'
+12345670111111 # orientation digit 0, below '1'
+12345671111114 # orientation digit 4, above '3'
+1234567111111a # non-digit character
+11345671111111 # cubie 1 appears twice and cubie 2 is missing
+12345671111112 # orientation sum 1, not divisible by 3: one corner twisted
+12345671111113 # orientation sum 2, not divisible by 3: one corner twisted the other way

@@ -50,5 +50,13 @@ ida_dbg.s: ida.S tables.s aux.s
 ripes-asm-dbg: ida_dbg.s
 	@$(RIPES) --mode cli --src ida_dbg.s -t asm --proc $(PROC_MODEL) --iret
 
+# run ida.S on every state in testcases/: rank checks (s3, s4),
+# exit checks the program's own exit code
+test-asm: ida.S tables.s aux.s
+	@RIPES=$(RIPES) PROC=$(PROC_MODEL) testcases/run.sh rank
+
+test-asm-exit: ida.S tables.s aux.s
+	@RIPES=$(RIPES) PROC=$(PROC_MODEL) testcases/run.sh exit
+
 clean:
 	@rm solver solver.elf ida_full.s ida_dbg.s

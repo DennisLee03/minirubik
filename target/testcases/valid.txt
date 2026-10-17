@@ -1,0 +1,12 @@
+# Valid states, one per line:  STATE # comment
+# (p, o) is the expected (r_p, r_o); d is the exact distance from host/solver.
+12345671111111 # solved; (p, o) = (0, 0); d = 0
+25314672313211 # one R from solved; (p, o) = (1104, 426); d = 1
+54321671111111 # one R2 from solved, swaps 1<->5 and 2<->4 without twisting; (p, o) = (3294, 0); d = 1
+26547312333212 # R B D' from solved, a short scramble; (p, o) = (1289, 480); d = 3
+37156422322313 # unrank(1500000); (p, o) = (2057, 447); d = 8
+13524762112211 # unrank(123456); (p, o) = (169, 255); d = 9
+62417351323232 # unrank(2750000); (p, o) = (3772, 212); d = 9
+76543213333331 # last rank 3674159, cubies reversed, orientation sum 12; (p, o) = (5039, 728); d = 10
+21345671111111 # swaps cubies 1 and 2, the shared reference vector; (p, o) = (720, 0); d = 11
+54721631111111 # worst distance-11 state for IDA* (106,635 expanded nodes); (p, o) = (3343, 0); d = 11

@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 #else
 
 // inlined testcase
-static const char input[] = "21345671111111";
+static const char input[] = "21345673211213";
 static const uint8_t expected = 11;
 
 // in freestanding C program, main is not spceical but I use ripes_main to prevent gcc do something
@@ -54,7 +54,7 @@ int ripes_main(void)
     // 2. rank
     uint16_t p = rank_perm(&state);
     uint16_t o = rank_orie(&state);
-    return p;
+    return o;
 
     // 3. search
     uint8_t len = solve_iteration(p, o);

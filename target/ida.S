@@ -2,7 +2,7 @@
 
 .data
 # INPUT INFO
-input:  .string "21345671111111"
+input:  .string "21345673211213"
 length: .byte   11
 
 # modulo data
@@ -20,6 +20,8 @@ smaller: .zero 6
 msg_print_state: .string "State Representation:\n"
 msg_permutation: .string "Calculate Permutation:\n"
 msg_orientation: .string "Calculate Orientation:\n"
+msg_p_equ:       .string "p = "
+msg_o_equ:       .string "o = "
 #endif
 
 .text
@@ -29,15 +31,57 @@ _start:
 
   # calculate state
   call parse_state
+  li t0, 1
   #if DEBUG
+  mv t1, a0
   la a0, msg_print_state
   li a7, 4
   ecall
   call print_state
+  mv a0, t1
   #endif
+  beq a0, t0, cal_p_o
+  li a0, 1
+  j exit
 
   # calculate (p, o)
+  cal_p_o:
   call rank_perm
+  mv s3, a0
+  #if DEBUG
+  la a0, msg_p_equ
+  li a7, 4  # str
+  ecall
+  mv a0, s3
+  li a7, 1 # int
+  ecall
+  li a0, 10 # \n
+  li a7, 11 # char
+  ecall
+  li a0, 10 # \n
+  li a7, 11 # char
+  ecall
+  #endif
+  
+  call rank_orie
+  mv s4, a0
+  #if DEBUG
+  la a0, msg_o_equ
+  li a7, 4  # str
+  ecall
+  mv a0, s4
+  li a7, 1 # int
+  ecall
+  li a0, 10 # \n
+  li a7, 11 # char
+  ecall
+  li a0, 10 # \n
+  li a7, 11 # char
+  ecall
+  #endif
+
+  # now we have (p, o) in (s3, s4)
+
   exit: 
   li a7, 93
   ecall 
@@ -91,7 +135,12 @@ parse_state:
     bne t0, zero, ps_loop # 0 <= counter < 14
 
   ps_ret_v:
-  j valid               # tail call: valid's ret returns straight to our caller
+  # check null terminated
+  lbu t1, 0(t1)
+  bne t1, zero, ps_ret_0
+
+  # tail call: valid's ret returns straight to our caller
+  j valid
 
   ps_ret_0:
   add a0, zero, zero
@@ -265,7 +314,29 @@ rank_perm:
 #     input:  state_o
 #     output: orientation
 rank_orie:
-  
+  #if DEBUG
+  la a0, msg_orientation
+  li a7, 4
+  ecall
+  #endif
+  mv s0, zero    # s0: o=0
+  la s1, state_o # s1: state_o
+  lbu s0, 0(s1)  # o = state_o[0]
+  li t0, 1       # t0: i=0
+  ro_loop:
+    # o = (o << 1) +  o /* x3 */ + state->o[i]
+    slli t1, s0, 1     # t1 = o << 1
+    add s0, t1, s0     # o = (o << 1) + o
+    add t1, s1, t0     # t1 = state_o + i
+    lbu t1, 0(t1)      # t1 = state_o[i]
+    add s0, s0, t1     # o = (o << 1) + o + state_o[i]
+
+    addi t0, t0, 1      # i++
+    li t1, 6            # t1 = 6 (temporary)
+    blt t0, t1, ro_loop # check i < 6
+
+  mv a0, s0
+  ret
 
 #if DEBUG
 #include "aux.s"
