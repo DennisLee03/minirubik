@@ -1,5 +1,33 @@
 #include "tables.s"
 
+/* root state, set by _start after ranking */
+#define ROOT_P   s3
+#define ROOT_O   s4
+
+/* IDA* search state, kept for the whole search */
+#define BOUND    s5
+#define DEPTH    s6        /* g */
+#define HP_BASE  s7        /* address of hp */
+#define HO_BASE  s8        /* address of ho */
+
+/* problem sizes */
+#define CUBIES       7
+#define MAX_DEPTH    11      /* diameter: no state is deeper */
+
+/* exit codes, same as ripes_main in solver.c */
+#define EXIT_OK          0
+#define EXIT_BAD_INPUT   1
+#define EXIT_NO_SOLUTION 2
+#define EXIT_BAD_PATH    3
+#define EXIT_BAD_LENGTH  4
+
+/* Ripes ecall numbers */
+#define SYS_PRINT_INT   1
+#define SYS_PRINT_STR   4
+#define SYS_PRINT_CHAR  11
+#define SYS_EXIT        93
+
+
 .data
 # INPUT INFO
 input:  .string "21345673211213"
@@ -35,13 +63,13 @@ _start:
   #if DEBUG
   mv t1, a0
   la a0, msg_print_state
-  li a7, 4
+  li a7, SYS_PRINT_STR
   ecall
   call print_state
   mv a0, t1
   #endif
   beq a0, t0, cal_p_o
-  li a0, 1
+  li a0, EXIT_BAD_INPUT
   j exit
 
   # calculate (p, o)
@@ -50,16 +78,16 @@ _start:
   mv s3, a0
   #if DEBUG
   la a0, msg_p_equ
-  li a7, 4  # str
+  li a7, SYS_PRINT_STR
   ecall
   mv a0, s3
-  li a7, 1 # int
+  li a7, SYS_PRINT_INT
   ecall
   li a0, 10 # \n
-  li a7, 11 # char
+  li a7, SYS_PRINT_CHAR
   ecall
   li a0, 10 # \n
-  li a7, 11 # char
+  li a7, SYS_PRINT_CHAR
   ecall
   #endif
   
@@ -67,23 +95,23 @@ _start:
   mv s4, a0
   #if DEBUG
   la a0, msg_o_equ
-  li a7, 4  # str
+  li a7, SYS_PRINT_STR
   ecall
   mv a0, s4
-  li a7, 1 # int
+  li a7, SYS_PRINT_INT
   ecall
   li a0, 10 # \n
-  li a7, 11 # char
+  li a7, SYS_PRINT_CHAR
   ecall
   li a0, 10 # \n
-  li a7, 11 # char
+  li a7, SYS_PRINT_CHAR
   ecall
   #endif
 
   # now we have (p, o) in (s3, s4)
 
   exit: 
-  li a7, 93
+  li a7, SYS_EXIT
   ecall 
 
 # parse_state
@@ -208,7 +236,7 @@ valid:
 rank_perm:
   #if DEBUG
   la a0, msg_permutation
-  li a7, 4
+  li a7, SYS_PRINT_STR
   ecall
   #endif
   mv s0, zero    # s0: p=0
@@ -219,13 +247,13 @@ rank_perm:
 
     #if DEBUG
     mv a0, t0
-    li a7, 1
+    li a7, SYS_PRINT_INT
     ecall
     li a0, 58
-    li a7, 11
+    li a7, SYS_PRINT_CHAR
     ecall
     li a0, 32
-    li a7, 11
+    li a7, SYS_PRINT_CHAR
     ecall
     #endif
 
@@ -233,7 +261,7 @@ rank_perm:
     rp_loop_j:
       #if DEBUG
       mv a0, t1
-      li a7, 1
+      li a7, SYS_PRINT_INT
       ecall
       #endif
 
@@ -255,15 +283,15 @@ rank_perm:
 
     #if DEBUG
     li a0, 62
-    li a7, 11
+    li a7, SYS_PRINT_CHAR
     ecall
     add t3, s2, t0
     lbu t3, 0(t3)
     mv a0, t3
-    li a7, 1
+    li a7, SYS_PRINT_INT
     ecall
     li a0, 10
-    li a7, 11
+    li a7, SYS_PRINT_CHAR
     ecall
     #endif
 
@@ -316,7 +344,7 @@ rank_perm:
 rank_orie:
   #if DEBUG
   la a0, msg_orientation
-  li a7, 4
+  li a7, SYS_PRINT_STR
   ecall
   #endif
   mv s0, zero    # s0: o=0

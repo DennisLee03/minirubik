@@ -54,7 +54,6 @@ int ripes_main(void)
     // 2. rank
     uint16_t p = rank_perm(&state);
     uint16_t o = rank_orie(&state);
-    return o;
 
     // 3. search
     uint8_t len = solve_iteration(p, o);
