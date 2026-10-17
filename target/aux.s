@@ -117,6 +117,13 @@ print_state:
   # newline
   li a0, 10    # '\n'
   li a7, 11    # print char
+  ecall
+
+  # newline
+  li a0, 10    # '\n'
+  li a7, 11    # print char
+  ecall
+
   mv a0, zero
 
   ret

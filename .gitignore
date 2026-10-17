@@ -10,3 +10,4 @@ verify
 specific_mod
 *.elf
 *ida_full.s
+*ida_dbg.s

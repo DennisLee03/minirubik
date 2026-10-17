@@ -26,11 +26,14 @@ int main(int argc, char **argv)
     printf("distance = %d\n", cost);
     for(uint8_t step=0; step<cost; step++) {
         uint8_t move = path[step];
-        if(move != 0xFF) {
-            printf("%s ", move_names[move]);
-        }
+        printf("%s ", move_names[move]);
     }
     printf("\n");
+    if (!verify_path(p, o, path, cost)) {
+        printf("Path Failed!\n");
+        return 1;
+    }
+    printf("Path Verified!!!!!!!!!\n");
 
     return output_failed();
 }
@@ -51,6 +54,7 @@ int ripes_main(void)
     // 2. rank
     uint16_t p = rank_perm(&state);
     uint16_t o = rank_orie(&state);
+    return p;
 
     // 3. search
     uint8_t len = solve_iteration(p, o);
