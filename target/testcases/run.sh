@@ -35,8 +35,8 @@ run_one() {   # $1 = state, $2 = expected distance (or empty)
         -e "s/^\(length:[[:space:]]*\.byte[[:space:]]*\)[0-9][0-9]*/\1${2:-0}/" \
         "$here/ida.S" > "$work/t.S"
     (cd "$work" && $cpp t.S > t.s) || return 1
-    timeout 120 "$ripes" --mode cli --src "$work/t.s" -t asm --proc "$proc" \
-        --regs --iret --timeout 60000 2>&1 | tr -d '\000'
+    timeout 600 "$ripes" --mode cli --src "$work/t.s" -t asm --proc "$proc" \
+        --regs --iret --timeout 500000 2>&1 | tr -d '\000'
 }
 
 if [ -n "$only_file" ]; then

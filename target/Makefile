@@ -10,13 +10,15 @@ INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 
 RV_CC      := riscv64-unknown-elf-gcc
 RV_NM      := riscv64-unknown-elf-nm
+RV_AS      := riscv64-unknown-elf-as -march=rv32i -mabi=ilp32
+RV_SIZE    := riscv64-unknown-elf-size -A
 RV_CPP     := riscv64-unknown-elf-cpp -P -x assembler-with-cpp
 RV_CFLAGS  := -O2 -march=rv32i -mabi=ilp32 -std=c99 -ffreestanding
 RV_LDFLAGS := -nostdlib -nostartfiles -Wl,-Ttext=0x0 -Wl,-e,_start
 RIPES      ?= ~/ca2026_ws/Ripes-v2.2.6-106-g5b8a616-linux-x86_64.AppImage
 PROC_MODEL ?= RV32_ISS
 
-.PHONY: all clean test
+.PHONY: all clean test check-sym ripes-gcc ripes-asm ripes-asm-dbg test-asm test-asm-exit test-asm-big size size-asm size-gcc
 
 all: solver solver.elf ida_full.s ida_dbg.s
 
@@ -62,5 +64,20 @@ test-asm-exit: ida.S tables.s aux.s
 test-asm-big: ida.S tables.s aux.s
 	@RIPES=$(RIPES) PROC=$(PROC_MODEL) testcases/run.sh exit testcases/by_distance.txt
 
+# Code and static-data size. The assembly is measured as GNU as assembles
+# ida_full.s, without linker relaxation, which matches what Ripes'
+# own assembler produces; the gcc reference is the linked solver.elf.
+# "data" sums every allocated data section: .data .rodata .sdata .bss .sbss.
+ida.o: ida_full.s
+	@$(RV_AS) $< -o $@
+
+size-asm: ida.o
+	@$(RV_SIZE) ida.o
+
+size-gcc: solver.elf
+	@$(RV_SIZE) solver.elf
+
+size: size-asm size-gcc
+
 clean:
-	@rm solver solver.elf ida_full.s ida_dbg.s
+	@rm -f solver solver.elf ida_full.s ida_dbg.s ida.o

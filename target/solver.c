@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 #else
 
 // inlined testcase
-static const char input[] = "21345673211213";
+static const char input[] = "54721631111111";
 static const uint8_t expected = 11;
 
 // in freestanding C program, main is not spceical but I use ripes_main to prevent gcc do something

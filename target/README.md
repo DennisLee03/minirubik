@@ -37,7 +37,7 @@ stride. The tables sit in `.data`, since Ripes may not accept `.rodata`.
 ## Running the C reference on Ripes
 
 ```sh
-make ripes          # build solver.elf and run it on RV32_ISS with --iret
+make ripes-gcc        # build solver.elf and run it on RV32_ISS with --iret
 ```
 
 A program built the usual way, against picolibc with
