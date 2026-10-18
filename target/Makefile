@@ -58,5 +58,9 @@ test-asm: ida.S tables.s aux.s
 test-asm-exit: ida.S tables.s aux.s
 	@RIPES=$(RIPES) PROC=$(PROC_MODEL) testcases/run.sh exit
 
+# 110 states, up to ten per distance 0..11, sampled from the BFS oracle
+test-asm-big: ida.S tables.s aux.s
+	@RIPES=$(RIPES) PROC=$(PROC_MODEL) testcases/run.sh exit testcases/by_distance.txt
+
 clean:
 	@rm solver solver.elf ida_full.s ida_dbg.s

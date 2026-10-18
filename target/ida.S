@@ -1,14 +1,20 @@
 #include "tables.s"
 
+#define PROWS s0
+#define OROWS s1
+
 /* root state, set by _start after ranking */
 #define ROOT_P   s3
 #define ROOT_O   s4
 
 /* IDA* search state, kept for the whole search */
-#define BOUND    s5
-#define DEPTH    s6        /* g */
-#define HP_BASE  s7        /* address of hp */
-#define HO_BASE  s8        /* address of ho */
+#define BOUND     s5
+#define DEPTH     s6      /* g */
+#define HP_BASE   s7      /* address of hp */
+#define HO_BASE   s8      /* address of ho */
+#define HPTR      s9      /* &stk_p[g]    */
+#define BPTR      s10     /* &stk_face[g] */
+#define FOUND_LEN s11	
 
 /* problem sizes */
 #define CUBIES       7
@@ -27,10 +33,19 @@
 #define SYS_PRINT_CHAR  11
 #define SYS_EXIT        93
 
+/* Offsets for stk_* arrays */
+#define OFF_P     0
+#define OFF_O     24
+#define OFF_NP    48
+#define OFF_NO    72
+#define OFF_FACE  0
+#define OFF_TURN  12
+#define OFF_PATH  24
+
 .data
 # INPUT INFO
-input:  .string "21345673211213"
-#define EXPECTED 10
+input:  .string "62417351323232"
+length: .byte 0
 
 # modulo data
 sum_mod3: .byte 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2 # 15 elements
@@ -67,13 +82,14 @@ perm_rows:   .word perm_R, perm_B, perm_D
 orient_rows: .word orient_R, orient_B, orient_D
 
 # for solve_iteration to keep information
+# continuous addresses, use one addr as base and offsets to access each
 stk_p:    .zero 24  # 12 halfwords
 stk_o:    .zero 24  # 12 halfwords
 stk_np:   .zero 24  # 12 halfwords
 stk_no:   .zero 24  # 12 halfwords
 stk_face: .zero 12  # 12 bytes
 stk_turn: .zero 12  # 12 bytes
-path:     .byte 0, 7, 5, 6, 5, 1, 8, 0, 3, 7
+path:     .zero 11  # 11 bytes
 
 
 .text
@@ -133,8 +149,25 @@ _start:
   #endif
 
   # now we have (p, o) in (ROOT_P, ROOT_O)
+  call solve_iteration
+  mv FOUND_LEN, a0
+  li t0, 255
+  bne FOUND_LEN, t0, verify
+  li a0, 2
+  j exit
 
+  verify:
   call verify_path
+  li t0, 1
+  beq a0, t0, test_expected
+  li a0, EXIT_BAD_PATH
+  j exit
+
+  test_expected:
+  la t0, length
+  lbu t0, 0(t0)
+  bne t0, FOUND_LEN, exit # length != expected
+  li a0, 0
 
   exit: 
   li a7, SYS_EXIT
@@ -405,16 +438,13 @@ verify_path:
   la a4, orient_rows  # a4: orient_rows = {orient_R, orient_B, orient_D}
   li t2, 0            # t2: i=0
   vp_loop_i:
-    ########## TODO ############
-    li t5, EXPECTED
-    ########## TODO ############
-    bge t2, t5, vp_ret   # i >= len: terminate loop
-    add t4, t3, t2       # t4 = path + i
-    lbu t4, 0(t4)        # t4 = move = path[i]
-    add t5, a1, t4       # t5 = move_face + move
-    lbu t5, 0(t5)        # t5 = face = move_face[move]
-    add t6, a2, t4       # t6 = move_turns + move
-    lbu t6, 0(t6)        # t6 = turns = move_turns[move]
+    bge t2, FOUND_LEN, vp_ret   # i >= len: terminate loop
+    add t4, t3, t2              # t4 = path + i
+    lbu t4, 0(t4)               # t4 = move = path[i]
+    add t5, a1, t4              # t5 = move_face + move
+    lbu t5, 0(t5)               # t5 = face = move_face[move]
+    add t6, a2, t4              # t6 = move_turns + move
+    lbu t6, 0(t6)               # t6 = turns = move_turns[move]
 
     mv t4, zero
     vp_loop_turn:
@@ -444,6 +474,217 @@ verify_path:
   ret
   vp_ret_0:
   mv a0, zero
+  ret
+
+# solve_iteration
+#    input:  ROOT_P, ROOT_O
+#    output: #moves
+solve_iteration:
+  
+  #if DEBUG
+  li a0, 40             # (
+  li a7, SYS_PRINT_CHAR
+  ecall
+  mv a0, ROOT_P         # (p
+  li a7, SYS_PRINT_INT
+  ecall
+  li a0, 44             # (p,
+  li a7, SYS_PRINT_CHAR
+  ecall
+  mv a0, ROOT_O         # (p,o
+  li a7, SYS_PRINT_INT
+  ecall
+  li a0, 41             # (p,o)
+  li a7, SYS_PRINT_CHAR
+  ecall
+  li a0, 10
+  li a7, SYS_PRINT_CHAR
+  ecall
+  #endif
+
+  # check solved
+  bne zero, ROOT_P, si_get_bound # p0 == 0 ?
+  bne zero, ROOT_O, si_get_bound # o0 == 0 ?
+  li a0, 0
+  ret
+
+  # get bound
+  si_get_bound:
+  la HP_BASE, hp
+  add t0, HP_BASE, ROOT_P  # t0 = hp + p0
+  lbu t0, 0(t0)            # t0 = hp[p0]
+  la HO_BASE, ho
+  add t1, HO_BASE, ROOT_O  # t1 = ho + o0
+  lbu t1, 0(t1)            # t1 = ho[o0]
+
+  #if DEBUG
+  li a0, 40             # (
+  li a7, SYS_PRINT_CHAR
+  ecall
+  mv a0, t0             # (hp[p0]
+  li a7, SYS_PRINT_INT
+  ecall
+  li a0, 44             # (hp[p0],
+  li a7, SYS_PRINT_CHAR
+  ecall
+  mv a0, t1             # (hp[p0],ho[o0]
+  li a7, SYS_PRINT_INT
+  ecall
+  li a0, 41             # (hp[p0],ho[o0])
+  li a7, SYS_PRINT_CHAR
+  ecall
+  li a0, 10
+  li a7, SYS_PRINT_CHAR
+  ecall
+  #endif
+
+  mv BOUND, t0
+  bge t0, t1, si_loop_bound
+  mv BOUND, t1
+  si_loop_bound:
+    li t0, 11
+    blt t0, BOUND, si_ret_err
+
+    #if DEBUG
+    li a0, 66
+    li a7, SYS_PRINT_CHAR
+    ecall
+    mv a0, BOUND
+    li a7, SYS_PRINT_INT
+    ecall
+    li a0, 10
+    li a7, SYS_PRINT_CHAR
+    ecall
+    #endif
+
+    # perm & orie transition tables setup
+    la PROWS, perm_rows
+    la OROWS, orient_rows
+
+    # DFS root
+    # stk_* arrays setup
+    la HPTR, stk_p          # base address for halfword arrays (stk_{p, o, np, no})
+    la BPTR, stk_face       # base address for byte arrays (stk_{face, turn}, path)
+    li DEPTH, 0             # g=0
+    sh ROOT_P, OFF_P(HPTR)  # p[0] = p0
+    sh ROOT_O, OFF_O(HPTR)  # o[0] = o0
+    sb zero, OFF_FACE(BPTR) # face[0] = 0
+    sb zero, OFF_TURN(BPTR) # turn[0] = 0
+    sh ROOT_P, OFF_NP(HPTR) # next_p[0] = p0
+    sh ROOT_O, OFF_NO(HPTR) # next_o[0] = o0
+    
+    si_while_1:
+      # explore nodes at level g:
+      si_loop_face:
+        lbu t1, OFF_FACE(BPTR)          # t1 = face[g]
+        li t2, 3                        # t2 = 3
+        bge t1, t2, si_loop_face_break  # face[g] >= 3: break
+
+        // if(g > 0 && face[g] == face[g-1]): skip this face
+        bge zero, DEPTH, si_loop_turn   // g <= 0: not continue 
+        addi t2, BPTR, -1               // t2 = base of &face[g-1]
+        lbu t2, OFF_FACE(t2)            // t2 = face[g-1]
+        beq t1, t2, si_loop_face_update // face[g] == face[g-1]: continue
+
+        // for(turn)
+        si_loop_turn:
+          # check loop boundary
+          lbu t3, OFF_TURN(BPTR)          # t3 = turn[g], end this loop
+          li t2, 3
+          bge t3, t2, si_loop_face_update # turn[g] >= 3
+
+          # 1. turn by transition tables
+          slli t0, t1, 2          # t0 = face[g] * 4
+          # next_p[g] = permutation[face[g]][next_p[g]]
+          lhu a1, OFF_NP(HPTR)    # a1 = next_p[g]
+          add a2, PROWS, t0       # a2 = &perm[face[g]]
+          lw a2, 0(a2)            # a2 = perm[face[g]]
+          slli t4, a1, 1          # t4 = next_p[g] * 2
+          add t4, a2, t4          # t4 = &perm[face[g]][next_p[g]]
+          lhu t4, 0(t4)           # t4 = perm[face[g]][next_p[g]] 
+          sh t4, OFF_NP(HPTR)     # next_p[g] = the table value
+          # next_o[g] = orientation[face[g]][next_o[g]]
+          lhu a3, OFF_NO(HPTR)    # a3 = next_o[g]
+          add a2, OROWS, t0       # a2 = &orie[face[g]]
+          lw a2, 0(a2)            # a2 = orie[face[g]]
+          slli t5, a3, 1          # t5 = next_o[g] * 2
+          add t5, a2, t5          # t5 = &orie[face[g]][next_o[g]]
+          lhu t5, 0(t5)           # t5 = orie[face[g]][next_o[g]] 
+          sh t5, OFF_NO(HPTR)     # next_o[g] = the table value
+          # INFO: ====== t4: next_p[g], t5: next_o[g] ======
+          # INFO: ====== a1: next_p + g, a3: next_o + g ======
+
+          # update path[g]: t1=face[g], t3=turn[g]
+          slli t0, t1, 1        # t0 = (face[g] << 1)
+          add t0, t0, t1        # t0 = (face[g] << 1) + face[g]
+          add t0, t0, t3        # t0 = (face[g] << 1) + face[g] + turn[g]
+          sb t0, OFF_PATH(BPTR) # path[g] = move
+          addi t3, t3, 1        # turn[g]++
+          sb t3, OFF_TURN(BPTR) # turn[g]++
+
+          # 2. check solved
+          bne t4, zero, si_prune  # check next_p[g] != 0
+          bne t5, zero, si_prune  # check next_o[g] != 0
+          mv a0, DEPTH            # a0 = g
+          addi a0, a0, 1          # a0 = g+1
+          ret
+
+          # 3. prune
+          // if((g+1) + h(next_p[g], next_o[g]) > bound) continue;
+          si_prune:
+          add t0, HP_BASE, t4    # t0 = hp + next_p[g]
+          lbu t0, 0(t0)          # t0 = hp[next_p[g]]
+          add t2, HO_BASE, t5    # t2 = ho + next_o[g]
+          lbu t2, 0(t2)          # t2 = ho[next_o[g]]
+          bge t0, t2, si_skip_mv # t0 >= t2: keep t0's value 
+          mv t0, t2
+          si_skip_mv:                 # t0 = h(p,o)
+          addi t0, t0, 1
+          add t0, t0, DEPTH           # t0 = g + 1 + h(p,o)
+          blt BOUND, t0, si_loop_turn # bound < estimate: continue
+
+          // 4. update
+          addi DEPTH, DEPTH, 1 # g++
+          addi HPTR, HPTR, 2
+          addi BPTR, BPTR, 1
+          sh t4, OFF_P(HPTR)      # p[g] = next_p[g-1] 
+          sh t5, OFF_O(HPTR)      # o[g] = next_o[g-1]
+          sb zero, OFF_FACE(BPTR) # face[g] = 0
+          sb zero, OFF_TURN(BPTR) # turn[g] = 0
+          sh t4, OFF_NP(HPTR)     # next_p[g] = p[g]
+          sh t5, OFF_NO(HPTR)     # next_o[g] = o[g]
+          j si_while_1
+
+        // update stacks
+        si_loop_face_update:
+        addi t1, t1, 1          //
+        sb t1, OFF_FACE(BPTR)   // 1. face[g]++
+        sb zero, OFF_TURN(BPTR) // 2. turn[g] = 0
+        lhu t2, OFF_P(HPTR)     // 3. t2 = p[g]
+        sh t2, OFF_NP(HPTR)     //    next_p[g] = p[g]
+        lhu t2, OFF_O(HPTR)     // 4. t2 = o[g]
+        sh t2, OFF_NO(HPTR)     //    next_o[g] = o[g]
+        j si_loop_face
+
+      si_loop_face_break:
+
+      /* if (g == 0) break while_1; */
+      beq DEPTH, zero, si_loop_bound_continue
+
+      /* go back one level */
+      addi DEPTH, DEPTH, -1
+      addi HPTR, HPTR, -2
+      addi BPTR, BPTR, -1
+
+      si_while_continue:
+      j si_while_1
+
+    si_loop_bound_continue:
+    addi BOUND, BOUND, 1
+    j si_loop_bound
+
+  si_ret_err:
+  li a0, 255
   ret
 
 #if DEBUG

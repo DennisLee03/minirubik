@@ -11,12 +11,15 @@
 #   exit             valid:   exit code 0 (the program's own verdict)
 #                    invalid: exit code 1
 #
-# Usage: testcases/run.sh [rank|exit]    (run from target/)
+# Usage: testcases/run.sh [rank|exit] [FILE]    (run from target/)
+#   With FILE, every line of FILE is treated as a valid state and the
+#   default valid.txt and invalid.txt are skipped.
 # Environment: RIPES (AppImage path), PROC (default RV32_ISS).
 
 set -u
 mode=${1:-rank}
-case $mode in rank|exit) ;; *) echo "usage: $0 [rank|exit]" >&2; exit 2 ;; esac
+case $mode in rank|exit) ;; *) echo "usage: $0 [rank|exit] [FILE]" >&2; exit 2 ;; esac
+only_file=${2:-}
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 ripes=${RIPES:-$HOME/ca2026_ws/Ripes-v2.2.6-106-g5b8a616-linux-x86_64.AppImage}
@@ -36,8 +39,15 @@ run_one() {   # $1 = state, $2 = expected distance (or empty)
         --regs --iret --timeout 60000 2>&1 | tr -d '\000'
 }
 
-for kind in valid invalid; do
-    grep -v '^#' "$here/testcases/$kind.txt" | while read -r state rest; do
+if [ -n "$only_file" ]; then
+    sets="valid:$only_file"
+else
+    sets="valid:$here/testcases/valid.txt invalid:$here/testcases/invalid.txt"
+fi
+
+for set in $sets; do
+    kind=${set%%:*}
+    grep -v '^#' "${set#*:}" | while read -r state rest; do
         [ -n "$state" ] || continue
         want_po=$(printf '%s' "$rest" | grep -oP '\(p, o\) = \(\K[0-9]+, [0-9]+')
         want_d=$(printf '%s' "$rest" | grep -oP 'd = \K[0-9]+')
