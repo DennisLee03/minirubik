@@ -44,8 +44,8 @@
 
 .data
 # INPUT INFO
-input:  .string "62417351323232"
-length: .byte 0
+input:  .string "54721631111111"
+length: .byte 11
 
 # modulo data
 sum_mod3: .byte 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2 # 15 elements

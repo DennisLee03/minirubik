@@ -194,7 +194,12 @@ On `RV32_ISS`, all 20 cases of `make test-asm-exit` and all 110 of
 | Retired, `54721631111111` (worst) | 29,374,893 | 32,584,398 | −9.9% |
 | `.text` bytes | 1,276 | 1,396 | −8.6% |
 
-The worst case uses 59% of the $5 \times 10^7$ budget. The assembly's
+The worst case uses 59% of the $5 \times 10^7$ budget. The C search
+expands 106,635 nodes on `54721631111111`; assuming the assembly, which
+tries children in the same order, expands the same nodes, that is about
+275 retired instructions per node against gcc's 306. The assembly does
+not count its own nodes, so this assumption has not been checked
+directly. The assembly's
 `.text` was measured by assembling `ida_full.s` with
 `riscv64-unknown-elf-as`; the gcc figure is the `.text` section of
 `solver.elf`, excluding the tables in `.rodata`.
